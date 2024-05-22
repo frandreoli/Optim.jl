@@ -2,6 +2,7 @@ struct ParticleSwarm{Tl, Tu} <: ZerothOrderOptimizer
     lower::Tl
     upper::Tu
     n_particles::Int
+    adaptive_bounds::Bool
 end
 
 """
@@ -10,13 +11,15 @@ end
 ```julia
 ParticleSwarm(; lower = [],
                 upper = [],
-                n_particles = 0)
+                n_particles = 0,
+                adaptive_bounds = false)
 ```
 
-The constructor takes 3 keywords:
+The constructor takes 4 keywords:
 * `lower = []`, a vector of lower bounds, unbounded below if empty or `-Inf`'s
 * `upper = []`, a vector of upper bounds, unbounded above if empty or `Inf`'s
 * `n_particles = 0`, the number of particles in the swarm, defaults to least three
+* `adaptive_bounds = false`, a boolean option defining the treatment of the boundary conditions
 
 ## Description
 The Particle Swarm implementation in Optim.jl is the so-called Adaptive Particle
@@ -33,7 +36,7 @@ reaches the maximum number of iterations set in Optim.Options(iterations=x)`.
 ## References
 - [1] Zhan, Zhang, and Chung. Adaptive particle swarm optimization, IEEE Transactions on Systems, Man, and Cybernetics, Part B: CyberneticsVolume 39, Issue 6 (2009): 1362-1381
 """
-ParticleSwarm(; lower = [], upper = [], n_particles = 0) = ParticleSwarm(lower, upper, n_particles)
+ParticleSwarm(; lower = [], upper = [], n_particles = 0, adaptive_bounds = false) = ParticleSwarm(lower, upper, n_particles, adaptive_bounds)
 
 Base.summary(::ParticleSwarm) = "Particle Swarm"
 
@@ -55,6 +58,7 @@ mutable struct ParticleSwarmState{Tx,T} <: ZerothOrderState
     x_learn
     current_state
     iterations::Int
+    adaptive_bounds::Bool
 end
 
 function initial_state(method::ParticleSwarm, options, d, initial_x::AbstractArray{T}) where T
@@ -90,6 +94,11 @@ function initial_state(method::ParticleSwarm, options, d, initial_x::AbstractArr
     else
         upper = method.upper
         limit_search_space = true
+    end
+    if isempty(method.adaptive_bounds)
+        adaptive_bounds = false
+    else
+        adaptive_bounds = method.adaptive_bounds
     end
 
     @assert length(lower) == length(initial_x) "limits must be of same length as x_initial."
@@ -178,7 +187,8 @@ function initial_state(method::ParticleSwarm, options, d, initial_x::AbstractArr
         best_score,
         x_learn,
         0,
-        options.iterations)
+        options.iterations,
+        adaptive_bounds)
 end
 
 function update_state!(f, state::ParticleSwarmState{T}, method::ParticleSwarm) where T
@@ -244,7 +254,11 @@ function update_state!(f, state::ParticleSwarmState{T}, method::ParticleSwarm) w
     update_swarm!(state.X, state.X_best, state.x, n, state.n_particles, state.V, state.w, state.c1, state.c2)
 
     if state.limit_search_space
-        limit_X!(state.X, state.lower, state.upper, state.n_particles, n)
+        if state.adaptive_bounds
+            limit_X_adaptive!(state.X, state.lower, state.upper, state.n_particles, n)
+        else
+            limit_X!(state.X, state.lower, state.upper, state.n_particles, n)
+        end
     end
     compute_cost!(f, state.n_particles, state.X, state.score)
 
@@ -466,6 +480,38 @@ function limit_X!(X, lower, upper, n_particles, n)
               	X[j, i] = lower[j]
             elseif X[j, i] > upper[j]
               	X[j, i] = upper[j]
+            end
+        end
+    end
+    nothing
+end
+
+function limit_X_adaptive!(X, lower, upper, n_particles, n)
+    # limit X values to boundaries
+    println("I'm in it works!!")
+    flush(stdout)
+    for i in 1:n_particles
+        for j in 1:n
+            if X[j, i] < lower[j]
+                #
+                range_X = upper[j] - lower[j]
+              	delta_X = lower[j] - X[j, i]
+                if delta_X <= range_X
+                    X[j, i] = lower[j] + delta_X
+                else
+                    X[j, i] = lower[j] + mod(delta_X,range_X)
+                end
+                #
+            elseif X[j, i] > upper[j]
+                #
+                range_X = upper[j] - lower[j]
+                delta_X = -(upper[j] - X[j, i])
+                if delta_X <= range_X
+                    X[j, i] = upper[j] - delta_X
+                else
+                    X[j, i] = upper[j] - mod(delta_X,range_X)
+                end
+                #
             end
         end
     end
