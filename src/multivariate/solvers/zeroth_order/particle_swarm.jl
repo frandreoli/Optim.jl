@@ -487,9 +487,7 @@ function limit_X!(X, lower, upper, n_particles, n)
 end
 
 function limit_X_adaptive!(X, lower, upper, n_particles, n)
-    # limit X values to boundaries
-    println("I'm in it works!!")
-    flush(stdout)
+    # reflection at boundaries
     for i in 1:n_particles
         for j in 1:n
             if X[j, i] < lower[j]
