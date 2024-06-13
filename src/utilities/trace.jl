@@ -6,7 +6,11 @@ function common_trace!(tr, d, state, iteration, method::FirstOrderOptimizer, opt
     if options.extended_trace
         dt["x"] = copy(state.x)
         dt["g(x)"] = copy(gradient(d))
-        dt["Current step size"] = state.alpha
+        if hasproperty(state,:alpha)
+            #To avoid
+            #ERROR: LoadError: type AdamState has no field alpha
+            dt["Current step size"] = state.alpha
+        end
     end
     g_norm = maximum(abs, gradient(d))
     update!(tr,
